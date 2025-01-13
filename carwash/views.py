@@ -14,7 +14,7 @@ from .serializers import LoginSerializer, WashOrdersSerializer, ServiceClassesWi
 from rest_framework import generics
 import json
 from rest_framework import status
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Sum, Q, DecimalField
 from django.db.models.functions import TruncDate
 
 from django.utils import timezone
@@ -155,27 +155,44 @@ class GeneralReportAPIView(APIView):
     permission_classes = [AllowAny]  # Разрешаем доступ всем
 
     def get(self, request, format=None):
+        """
+        Возвращает общий отчет по заказам за указанный период.
+        Параметры:
+        - start_date: Начальная дата в формате 'YYYY-MM-DD'
+        - end_date: Конечная дата в формате 'YYYY-MM-DD'
+        """
         start_date = request.GET.get('start_date')
         end_date = request.GET.get('end_date')
-        wash_orders = WashOrders.objects.all()
 
-        if start_date and end_date:
-            try:
+        # Валидация дат
+        try:
+            if start_date:
                 start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            if end_date:
                 end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-                wash_orders = wash_orders.filter(order_date__date__range=(start_date, end_date))
-            except ValueError:
-                return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError:
+            return Response(
+                {'error': 'Неверный формат даты. Используйте формат YYYY-MM-DD.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        # Фильтрация заказов по дате
+        wash_orders = WashOrders.objects.all()
+        if start_date and end_date:
+            wash_orders = wash_orders.filter(order_date__date__range=(start_date, end_date))
+
+        # Проверка наличия заказов
         if not wash_orders.exists():
             return Response([], status=status.HTTP_200_OK)
 
-        # Группируем заказы по дате и вычисляем общие значения для каждой даты
-        report_data = wash_orders.annotate(order_date_only=TruncDate('order_date')).values('order_date_only').annotate(
+        # Группировка и вычисление данных
+        report_data = wash_orders.annotate(
+            order_date_only=TruncDate('order_date')
+        ).values('order_date_only').annotate(
             total_washes=Count('id'),
-            total_amount=Sum('negotiated_price'),
-            employees_amount=Sum('negotiated_price') * Decimal(0.40),
-            cashier_amount=Sum('negotiated_price') * Decimal(0.60)
+            total_amount=Sum('negotiated_price', output_field=DecimalField()),
+            employees_amount=Sum('negotiated_price', output_field=DecimalField()) * Decimal('0.40'),
+            cashier_amount=Sum('negotiated_price', output_field=DecimalField()) * Decimal('0.60')
         ).order_by('order_date_only')
 
         return Response(report_data, status=status.HTTP_200_OK)
