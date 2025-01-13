@@ -1,42 +1,26 @@
-from django.contrib.auth import login, logout
-from django.contrib.auth.forms import AuthenticationForm
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import redirect
 from django.views import View
-from django.contrib.auth.decorators import login_required
-from django.utils.decorators import method_decorator
-from django.contrib import messages
-from django.views.generic import TemplateView
 from employees.models import Employees
-from django.core.paginator import Paginator
 from .models import WashOrders, ServiceClasses
 from decimal import Decimal
-from datetime import timedelta
 import logging
 from django.urls import reverse
 import telegram
-from datetime import datetime
-from django.db.models import Q
-from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
 from .serializers import LoginSerializer, WashOrdersSerializer, ServiceClassesWithServiceNameSerializer, \
     WashOrdersListSerializer, EmployeeStatsSerializer, GeneralReportSerializer, EmployeeAtWorkSerializer, \
     EmployeeDetailWashOrderSerializer, WashOrderSerializer
 from rest_framework import generics
 import json
 from rest_framework import status
-from django.db.models import Count, Sum, F, ExpressionWrapper, Q
-from django.db.models.functions import Coalesce
+from django.db.models import Count, Sum, Q
 from django.db.models.functions import TruncDate
-from django.db.models import DecimalField, ExpressionWrapper
-from django.db import models
+
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.http import JsonResponse
-from datetime import date
 from datetime import datetime, time
 from django.utils.timezone import make_aware
 from django.core.cache import cache
@@ -282,8 +266,11 @@ class WashOrdersListAPIView(APIView):
 
 class AddWashOrderAPIView(generics.CreateAPIView):
     permission_classes = [AllowAny]  # Разрешаем доступ всем
-    queryset = WashOrders.objects.all()
     serializer_class = WashOrdersSerializer
+
+    def get_queryset(self):
+        # Фильтруем мойщиков, исключая уволенных
+        return Employees.objects.filter(fired=False)
 
     def perform_create(self, serializer):
         employee_id = self.request.data.get('employees')

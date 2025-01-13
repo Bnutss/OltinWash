@@ -74,6 +74,8 @@ class LoginSerializer(serializers.Serializer):
 
 
 class WashOrdersSerializer(serializers.ModelSerializer):
+    employees = serializers.PrimaryKeyRelatedField(queryset=Employees.objects.filter(fired=False))
+
     class Meta:
         model = WashOrders
         fields = '__all__'
