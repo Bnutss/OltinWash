@@ -12,8 +12,14 @@ class WasherEmployeesListAPIView(generics.ListAPIView):
     serializer_class = EmployeesSerializer
 
     def get_queryset(self):
+        # Получаем должность "Мойщик"
         washer_positions = Positions.objects.filter(name_positions='Мойщик')
-        return Employees.objects.filter(position__in=washer_positions).order_by('name_employees')
+
+        # Фильтруем сотрудников, которые являются мойщиками и не уволены
+        return Employees.objects.filter(
+            position__in=washer_positions,
+            fired=False  # Исключаем уволенных
+        ).order_by('name_employees')
 
 
 class EmployeeDeleteAPIView(generics.DestroyAPIView):
