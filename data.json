@@ -1,0 +1,222 @@
+[
+  {
+    "model": "carwash.services",
+    "pk": 3,
+    "fields": {
+      "name_services": "Договорный",
+      "time_update": "2024-07-07T12:31:47.936Z",
+      "time_create": "2024-06-28T09:44:58.528Z"
+    }
+  },
+  {
+    "model": "carwash.services",
+    "pk": 18,
+    "fields": {
+      "name_services": "Мойка грузовых",
+      "time_update": "2024-07-07T12:24:56.130Z",
+      "time_create": "2024-07-07T12:24:56.130Z"
+    }
+  },
+  {
+    "model": "carwash.services",
+    "pk": 19,
+    "fields": {
+      "name_services": "Комплексная мойка",
+      "time_update": "2024-07-07T12:27:07.314Z",
+      "time_create": "2024-07-07T12:27:07.314Z"
+    }
+  },
+  {
+    "model": "carwash.services",
+    "pk": 20,
+    "fields": {
+      "name_services": "Кузовная мойка",
+      "time_update": "2024-07-07T12:27:19.308Z",
+      "time_create": "2024-07-07T12:27:19.308Z"
+    }
+  },
+  {
+    "model": "carwash.services",
+    "pk": 21,
+    "fields": {
+      "name_services": "Комплексная мойка + мотор",
+      "time_update": "2024-07-07T12:27:39.128Z",
+      "time_create": "2024-07-07T12:27:39.128Z"
+    }
+  },
+  {
+    "model": "carwash.services",
+    "pk": 22,
+    "fields": {
+      "name_services": "Мойка фур",
+      "time_update": "2024-07-07T12:27:49.609Z",
+      "time_create": "2024-07-07T12:27:49.609Z"
+    }
+  },
+  {
+    "model": "carwash.services",
+    "pk": 23,
+    "fields": {
+      "name_services": "Химчистка",
+      "time_update": "2024-07-07T12:28:06.665Z",
+      "time_create": "2024-07-07T12:28:06.665Z"
+    }
+  },
+  {
+    "model": "carwash.services",
+    "pk": 24,
+    "fields": {
+      "name_services": "Отбивка",
+      "time_update": "2024-07-07T12:28:14.836Z",
+      "time_create": "2024-07-07T12:28:14.836Z"
+    }
+  },
+  {
+    "model": "carwash.services",
+    "pk": 25,
+    "fields": {
+      "name_services": "Отбивка + салон",
+      "time_update": "2024-07-07T12:28:30.504Z",
+      "time_create": "2024-07-07T12:28:30.504Z"
+    }
+  },
+  {
+    "model": "carwash.services",
+    "pk": 26,
+    "fields": {
+      "name_services": "Отбивка + протирка",
+      "time_update": "2024-07-07T12:28:45.308Z",
+      "time_create": "2024-07-07T12:28:45.308Z"
+    }
+  },
+  {
+    "model": "carwash.services",
+    "pk": 27,
+    "fields": {
+      "name_services": "Чехол",
+      "time_update": "2024-07-16T14:45:36.336Z",
+      "time_create": "2024-07-16T14:45:36.336Z"
+    }
+  },
+  {
+    "model": "carwash.serviceclasses",
+    "pk": 3,
+    "fields": {
+      "services": 3,
+      "name": "Договорный",
+      "price": null,
+      "time_update": "2024-07-07T12:31:48.970Z",
+      "time_create": "2024-06-28T09:45:04.978Z"
+    }
+  },
+  {
+    "model": "carwash.serviceclasses",
+    "pk": 27,
+    "fields": {
+      "services": 18,
+      "name": "Мойка грузовых",
+      "price": null,
+      "time_update": "2024-07-07T12:25:09.177Z",
+      "time_create": "2024-07-07T12:25:09.177Z"
+    }
+  },
+  {
+    "model": "carwash.serviceclasses",
+    "pk": 28,
+    "fields": {
+      "services": 26,
+      "name": "Отбивка + протирка",
+      "price": null,
+      "time_update": "2024-07-07T12:29:35.028Z",
+      "time_create": "2024-07-07T12:29:16.763Z"
+    }
+  },
+  {
+    "model": "carwash.serviceclasses",
+    "pk": 29,
+    "fields": {
+      "services": 25,
+      "name": "Отбивка + салон",
+      "price": null,
+      "time_update": "2024-07-07T12:29:55.225Z",
+      "time_create": "2024-07-07T12:29:55.225Z"
+    }
+  },
+  {
+    "model": "carwash.serviceclasses",
+    "pk": 30,
+    "fields": {
+      "services": 24,
+      "name": "Отбивка",
+      "price": null,
+      "time_update": "2024-07-07T12:30:11.526Z",
+      "time_create": "2024-07-07T12:30:11.526Z"
+    }
+  },
+  {
+    "model": "carwash.serviceclasses",
+    "pk": 31,
+    "fields": {
+      "services": 23,
+      "name": "Химчистка",
+      "price": null,
+      "time_update": "2024-07-07T12:30:24.735Z",
+      "time_create": "2024-07-07T12:30:24.735Z"
+    }
+  },
+  {
+    "model": "carwash.serviceclasses",
+    "pk": 32,
+    "fields": {
+      "services": 21,
+      "name": "Комплексная мойка + мотор",
+      "price": null,
+      "time_update": "2024-07-07T12:30:50.855Z",
+      "time_create": "2024-07-07T12:30:50.855Z"
+    }
+  },
+  {
+    "model": "carwash.serviceclasses",
+    "pk": 33,
+    "fields": {
+      "services": 20,
+      "name": "Кузовная мойка",
+      "price": null,
+      "time_update": "2024-07-07T12:31:05.820Z",
+      "time_create": "2024-07-07T12:31:05.820Z"
+    }
+  },
+  {
+    "model": "carwash.serviceclasses",
+    "pk": 34,
+    "fields": {
+      "services": 19,
+      "name": "Комплексная мойка",
+      "price": null,
+      "time_update": "2024-07-07T12:31:23.524Z",
+      "time_create": "2024-07-07T12:31:23.525Z"
+    }
+  },
+  {
+    "model": "carwash.serviceclasses",
+    "pk": 35,
+    "fields": {
+      "services": 22,
+      "name": "Мойка фур",
+      "price": null,
+      "time_update": "2024-07-07T12:31:37.156Z",
+      "time_create": "2024-07-07T12:31:37.156Z"
+    }
+  },
+  {
+    "model": "carwash.serviceclasses",
+    "pk": 36,
+    "fields": {
+      "services": 27,
+      "name": "Чехол",
+      "price": null,
+      "time_update": "2024-07-16T14:46:09.087Z",
+      "time_create": "2024-07-16T14:46:09.087Z"
+    }
+  }
+]
