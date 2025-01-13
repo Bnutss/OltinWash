@@ -5,6 +5,7 @@ from django.utils.timezone import now
 from PIL import Image
 from io import BytesIO
 from django.core.files.base import ContentFile
+from PIL import Image, ExifTags
 
 
 class UserProfile(models.Model):
@@ -74,6 +75,23 @@ class WashOrders(models.Model):
         # Конвертация изображения в WebP и изменение размера
         if self.car_photo:
             img = Image.open(self.car_photo)
+
+            # Проверка и исправление ориентации изображения
+            try:
+                for orientation in ExifTags.TAGS.keys():
+                    if ExifTags.TAGS[orientation] == 'Orientation':
+                        break
+                exif = dict(img._getexif().items())
+
+                if exif[orientation] == 3:
+                    img = img.rotate(180, expand=True)
+                elif exif[orientation] == 6:
+                    img = img.rotate(270, expand=True)
+                elif exif[orientation] == 8:
+                    img = img.rotate(90, expand=True)
+            except (AttributeError, KeyError, IndexError):
+                # Если EXIF-данные отсутствуют или не содержат информации о ориентации, ничего не делаем
+                pass
 
             # Изменение размера изображения (максимальная ширина 1200 пикселей)
             max_width = 1200
