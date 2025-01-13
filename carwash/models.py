@@ -68,9 +68,9 @@ class WashOrders(models.Model):
 
         if self.type_of_car_wash.name in ['Договорный', 'Комплексная мойка', 'Кузовная мойка',
                                           'Комплексная мойка + мотор', 'Мойка фур']:
-            self.fund = 10000
+            self.fund = 5000
         elif self.type_of_car_wash.name == 'Мойка грузовых':
-            self.fund = 20000
+            self.fund = 15000
 
         # Конвертация изображения в WebP и изменение размера
         if self.car_photo:
