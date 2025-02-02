@@ -61,8 +61,10 @@ class WashOrders(models.Model):
     completion_date = models.DateTimeField(blank=True, null=True, verbose_name='Дата завершения')
 
     def save(self, *args, **kwargs):
+
         if not self.order_date:
             self.order_date = now()
+
         if not self.negotiated_price and self.type_of_car_wash:
             self.negotiated_price = self.type_of_car_wash.price
 
@@ -72,43 +74,36 @@ class WashOrders(models.Model):
         elif self.type_of_car_wash.name == 'Мойка грузовых':
             self.fund = 15000
 
-        # Конвертация изображения в WebP и изменение размера
         if self.car_photo:
-            img = Image.open(self.car_photo)
-
-            # Проверка и исправление ориентации изображения
             try:
-                for orientation in ExifTags.TAGS.keys():
-                    if ExifTags.TAGS[orientation] == 'Orientation':
-                        break
-                exif = dict(img._getexif().items())
-
-                if exif[orientation] == 3:
-                    img = img.rotate(180, expand=True)
-                elif exif[orientation] == 6:
-                    img = img.rotate(270, expand=True)
-                elif exif[orientation] == 8:
-                    img = img.rotate(90, expand=True)
-            except (AttributeError, KeyError, IndexError):
-                # Если EXIF-данные отсутствуют или не содержат информации о ориентации, ничего не делаем
+                img = Image.open(self.car_photo)
+                exif = img._getexif()
+                if exif:
+                    exif_dict = dict(exif.items())
+                    orientation_key = next(
+                        (key for key, value in ExifTags.TAGS.items() if value == 'Orientation'),
+                        None
+                    )
+                    if orientation_key and orientation_key in exif_dict:
+                        orientation = exif_dict[orientation_key]
+                        if orientation == 3:
+                            img = img.rotate(180, expand=True)
+                        elif orientation == 6:
+                            img = img.rotate(270, expand=True)
+                        elif orientation == 8:
+                            img = img.rotate(90, expand=True)
+            except Exception:
                 pass
-
-            # Изменение размера изображения (максимальная ширина 1200 пикселей)
-            max_width = 1200
-            if img.width > max_width:
-                ratio = max_width / img.width
-                new_height = int(img.height * ratio)
-                img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
-
-            # Конвертация в WebP
+            max_dimensions = (1200, 1200)
+            img.thumbnail(max_dimensions, Image.Resampling.LANCZOS)
             output = BytesIO()
-            img.save(output, format='WEBP', quality=85)
+            img.save(output, format='WEBP', quality=70, optimize=True)
             output.seek(0)
+            file_root = self.car_photo.name.rsplit('.', 1)[0]
+            new_file_name = f"{file_root}.webp"
+            self.car_photo.save(new_file_name, ContentFile(output.read()), save=False)
 
-            # Сохранение изображения
-            self.car_photo.save(f"{self.car_photo.name.split('.')[0]}.webp", ContentFile(output.read()), save=False)
-
-        super(WashOrders, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Заказ {self.id} - {self.employees}"
