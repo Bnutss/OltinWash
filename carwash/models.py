@@ -69,7 +69,7 @@ class WashOrders(models.Model):
             self.negotiated_price = self.type_of_car_wash.price
 
         if self.type_of_car_wash.name in ['Договорный', 'Комплексная мойка', 'Кузовная мойка',
-                                          'Комплексная мойка + мотор', 'Мойка фур']:
+                                          'Мойка двигателя', 'Мойка фур']:
             self.fund = 5000
         elif self.type_of_car_wash.name == 'Мойка грузовых':
             self.fund = 15000
