@@ -910,22 +910,14 @@ async def handle_unauthorized_messages(message: Message):
 async def main():
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
-
     dp.include_router(router)
 
-    print("🚀✨ OltinWash Bot запущен с простой системой пользователей! 💎🔒")
-    print(f"👑 Резервных администраторов: {len(FALLBACK_ADMIN_IDS)}")
+    await bot.set_webhook(
+        url="https://yourdomain.com/webhook",
+        drop_pending_updates=True
+    )
 
-    for admin_id in FALLBACK_ADMIN_IDS:
-        if not await is_user_authorized(admin_id):
-            await create_telegram_user(
-                telegram_id=admin_id,
-                first_name="Администратор",
-                is_admin=True
-            )
-            print(f"✅ Создан резервный администратор: {admin_id}")
-
-    await dp.start_polling(bot)
+    print("🚀 Webhook установлен!")
 
 
 if __name__ == '__main__':
