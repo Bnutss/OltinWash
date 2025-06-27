@@ -3,11 +3,7 @@ db.sqlite3
 
 # Кэш Python
 __pycache__/
-
-# Миграции базы данных (исключаем содержимое, но оставляем папку и __init__.py)
-migrations/*
-!migrations/
-!migrations/__init__.py
+*.py[cod]
 
 # Виртуальные окружения
 venv/
@@ -15,19 +11,42 @@ venv/
 
 # Настройки среды разработки
 .idea/
-.idea/
+.vscode/
+*.code-workspace
 
 # Файлы сессий
 *.session
 
 # Конфигурационные файлы среды
 .env
+*.env
 
 # Медиа-файлы
 /media/
 
-# Исключаем дамп базы данных Postgres
+# Исключаем дамп базы данных PostgreSQL
 dump.sql
+
+# Исключаем файлы миграций, кроме __init__.py
+**/migrations/*
+!**/migrations/__init__.py
+
+# Логи и временные файлы
+logs/
+*.log
+*.out
+*.pid
+*.swp
+*.swo
+
+# Файлы статических сборок
+/staticfiles/
+/static/
+node_modules/
 
 # macOS system files
 .DS_Store
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
