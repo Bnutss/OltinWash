@@ -3,10 +3,13 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 
+from webhook_view import telegram_webhook
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('employees/', include('employees.urls', namespace='employees')),
     path('', include('carwash.urls', namespace='carwash')),
+    path('webhook/telegram/', telegram_webhook, name='telegram_webhook'),
 
 ]
 
