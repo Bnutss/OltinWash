@@ -6,17 +6,23 @@ from aiogram.fsm.state import State, StatesGroup
 from asgiref.sync import sync_to_async
 from datetime import datetime, timezone, timedelta
 from functools import wraps
+import logging
 
 from carwash.models import Services, ServiceClasses, WashOrders, TelegramUser
 from employees.models import Employees
 
+logger = logging.getLogger(__name__)
+
+# Админы по умолчанию
 FALLBACK_ADMIN_IDS = {
-    1207702857,
+    1207702857,  # Ваш ID
 }
 
+# Таймзона Ташкента
 TASHKENT_TZ = timezone(timedelta(hours=5))
 
 
+# Состояния для FSM
 class OrderStates(StatesGroup):
     choosing_service = State()
     choosing_class = State()
@@ -30,8 +36,11 @@ class AdminStates(StatesGroup):
     deleting_user = State()
 
 
+# Создаем роутер
 router = Router()
 
+
+# === ФУНКЦИИ ДЛЯ РАБОТЫ С БД ===
 
 @sync_to_async
 def get_telegram_user(telegram_id):
@@ -63,15 +72,17 @@ def get_all_telegram_users():
 @sync_to_async
 def create_telegram_user(telegram_id, username=None, first_name=None, is_admin=False):
     try:
-        user = TelegramUser.objects.create(
+        user, created = TelegramUser.objects.get_or_create(
             telegram_id=str(telegram_id),
-            username=username,
-            first_name=first_name or f"User_{telegram_id}",
-            is_admin=is_admin
+            defaults={
+                'username': username,
+                'first_name': first_name or f"User_{telegram_id}",
+                'is_admin': is_admin
+            }
         )
         return user
     except Exception as e:
-        print(f"Ошибка создания пользователя: {e}")
+        logger.error(f"Ошибка создания пользователя: {e}")
         return None
 
 
@@ -98,6 +109,53 @@ def update_telegram_user(telegram_id, username=None, first_name=None):
     except TelegramUser.DoesNotExist:
         return None
 
+
+@sync_to_async
+def get_all_services():
+    return list(Services.objects.all())
+
+
+@sync_to_async
+def get_service_by_id(service_id):
+    return Services.objects.get(id=service_id)
+
+
+@sync_to_async
+def get_service_classes_by_service(service_id):
+    return list(ServiceClasses.objects.filter(services_id=service_id))
+
+
+@sync_to_async
+def get_service_class_by_id(class_id):
+    return ServiceClasses.objects.get(id=class_id)
+
+
+@sync_to_async
+def get_all_employees():
+    return list(Employees.objects.all())
+
+
+@sync_to_async
+def get_employee_by_id(employee_id):
+    return Employees.objects.get(id=employee_id)
+
+
+@sync_to_async
+def create_wash_order(type_of_car_wash, employee, car_photo_content, filename):
+    from django.core.files.base import ContentFile
+    return WashOrders.objects.create(
+        type_of_car_wash=type_of_car_wash,
+        employees=employee,
+        car_photo=ContentFile(car_photo_content, name=filename)
+    )
+
+
+@sync_to_async
+def get_orders_count():
+    return WashOrders.objects.count()
+
+
+# === ПРОВЕРКА ДОСТУПА ===
 
 async def check_access(telegram_id):
     return await is_user_authorized(telegram_id) or telegram_id in FALLBACK_ADMIN_IDS
@@ -152,50 +210,7 @@ async def send_access_denied(update):
         await update.answer("🚫 Доступ запрещен", show_alert=True)
 
 
-@sync_to_async
-def get_all_services():
-    return list(Services.objects.all())
-
-
-@sync_to_async
-def get_service_by_id(service_id):
-    return Services.objects.get(id=service_id)
-
-
-@sync_to_async
-def get_service_classes_by_service(service_id):
-    return list(ServiceClasses.objects.filter(services_id=service_id))
-
-
-@sync_to_async
-def get_service_class_by_id(class_id):
-    return ServiceClasses.objects.get(id=class_id)
-
-
-@sync_to_async
-def get_all_employees():
-    return list(Employees.objects.all())
-
-
-@sync_to_async
-def get_employee_by_id(employee_id):
-    return Employees.objects.get(id=employee_id)
-
-
-@sync_to_async
-def create_wash_order(type_of_car_wash, employee, car_photo_content, filename):
-    from django.core.files.base import ContentFile
-    return WashOrders.objects.create(
-        type_of_car_wash=type_of_car_wash,
-        employees=employee,
-        car_photo=ContentFile(car_photo_content, name=filename)
-    )
-
-
-@sync_to_async
-def get_orders_count():
-    return WashOrders.objects.count()
-
+# === КЛАВИАТУРЫ ===
 
 async def get_services_keyboard():
     services = await get_all_services()
@@ -307,6 +322,8 @@ def get_admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+# === ОБРАБОТЧИКИ КОМАНД ===
+
 @router.message(Command("start"))
 @access_required
 async def start_command(message: Message, state: FSMContext):
@@ -316,6 +333,7 @@ async def start_command(message: Message, state: FSMContext):
     user_id = message.from_user.id
     orders_count = await get_orders_count()
 
+    # Обновляем информацию о пользователе
     await update_telegram_user(
         telegram_id=user_id,
         username=message.from_user.username,
@@ -347,7 +365,7 @@ async def start_command(message: Message, state: FSMContext):
 Привет, <b>{user_name}</b>! 👋
 
 🔥 <b>Премиальная автомойка в Ташкенте</b>
-✨ Профессиональный уход за вашим авто
+✨ Профессиональный уход за вашим авто  
 💎 Высочайшее качество обслуживания
 
 📊 Всего заказов выполнено: <b>{orders_count}</b>
@@ -387,6 +405,8 @@ async def admin_users_command(message: Message):
 
     await message.answer(users_text, parse_mode="HTML")
 
+
+# === ОБРАБОТЧИКИ СОСТОЯНИЙ ===
 
 @router.message(AdminStates.adding_user)
 async def add_user_process(message: Message, state: FSMContext):
@@ -511,6 +531,8 @@ async def wrong_photo_format(message: Message):
         parse_mode="HTML"
     )
 
+
+# === CALLBACK ОБРАБОТЧИКИ ===
 
 @router.callback_query(F.data == "add_user")
 async def add_user_start(callback: CallbackQuery, state: FSMContext):
@@ -721,12 +743,19 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
     bot = callback.bot
 
     try:
+        # Скачиваем фото
         file_info = await bot.get_file(data['photo_file_id'])
         file_data = await bot.download_file(file_info.file_path)
+
+        # Получаем объекты из БД
         service_class = await get_service_class_by_id(data['class_id'])
         employee = await get_employee_by_id(data['employee_id'])
+
+        # Создаем заказ
         filename = f"car_{callback.from_user.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
         order = await create_wash_order(service_class, employee, file_data.getvalue(), filename)
+
+        # Форматируем ответ
         price_text = f"{int(order.negotiated_price):,} UZS" if order.negotiated_price else "Договорная"
         local_time = order.time_create.replace(tzinfo=timezone.utc).astimezone(TASHKENT_TZ)
 
@@ -746,6 +775,8 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
 
 ✨ <b>Спасибо за выбор OltinWash!</b>
 """
+
+        # Кнопки для продолжения
         if await check_admin_access(callback.from_user.id):
             new_order_button = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
@@ -772,6 +803,7 @@ async def confirm_order(callback: CallbackQuery, state: FSMContext):
         )
 
     except Exception as e:
+        logger.error(f"Error creating order: {e}")
         error_text = f"""
 ❌ <b>ОШИБКА ПРИ СОЗДАНИИ ЗАКАЗА</b>
 
@@ -878,6 +910,8 @@ async def cancel_order(callback: CallbackQuery, state: FSMContext):
     )
     await state.clear()
 
+
+# === ОБРАБОТЧИК НЕИЗВЕСТНЫХ СООБЩЕНИЙ ===
 
 @router.message()
 async def handle_unauthorized_messages(message: Message):
