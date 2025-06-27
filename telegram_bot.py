@@ -11,10 +11,6 @@ BOT_TOKEN = "8087998931:AAGykWvkx-deJ8G5O0kmfoI_TcJXl2fLMtE"
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-try:
-    import telegram_handlers
+import telegram_handlers
 
-    dp.include_router(telegram_handlers.router)
-    print("✅ Telegram handlers loaded successfully")
-except Exception as e:
-    print(f"❌ Error loading telegram handlers: {e}")
+dp.include_router(telegram_handlers.router)
