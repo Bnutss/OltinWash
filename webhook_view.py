@@ -6,11 +6,32 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from carwash.models import TelegramUser, Services, ServiceClasses, WashOrders
 from employees.models import Employees
+from django.core.files.base import ContentFile
+from datetime import datetime
+import re
 
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = "8087998931:AAGykWvkx-deJ8G5O0kmfoI_TcJXl2fLMtE"
 FALLBACK_ADMIN_IDS = {1207702857}
+
+# Состояния пользователей
+USER_STATES = {}
+
+
+def get_user_state(user_id):
+    """Получить состояние пользователя"""
+    return USER_STATES.get(str(user_id), {})
+
+
+def set_user_state(user_id, state):
+    """Установить состояние пользователя"""
+    USER_STATES[str(user_id)] = state
+
+
+def clear_user_state(user_id):
+    """Очистить состояние пользователя"""
+    USER_STATES.pop(str(user_id), None)
 
 
 def send_message(chat_id, text, reply_markup=None):
@@ -68,6 +89,31 @@ def answer_callback_query(callback_query_id, text=None, show_alert=False):
         logger.error(f"Ошибка ответа на callback: {e}")
 
 
+def download_photo(file_id):
+    """Скачивание фото из Telegram"""
+    try:
+        # Получаем информацию о файле
+        file_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
+        file_response = requests.get(file_url)
+        file_data = file_response.json()
+
+        if not file_data.get('ok'):
+            return None
+
+        file_path = file_data['result']['file_path']
+
+        # Скачиваем файл
+        download_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+        photo_response = requests.get(download_url)
+
+        if photo_response.status_code == 200:
+            return photo_response.content
+        return None
+    except Exception as e:
+        logger.error(f"Ошибка скачивания фото: {e}")
+        return None
+
+
 def is_user_authorized(telegram_id):
     """Проверка авторизации пользователя"""
     if telegram_id in FALLBACK_ADMIN_IDS:
@@ -100,6 +146,11 @@ def get_services_keyboard():
                 'text': f"{emoji} {service.name_services}",
                 'callback_data': f"service_{service.id}"
             }])
+
+        buttons.append([{
+            'text': "◀️ Назад в меню",
+            'callback_data': "main_menu"
+        }])
 
         return {'inline_keyboard': buttons}
     except Exception as e:
@@ -177,7 +228,7 @@ def get_admin_keyboard():
         [{'text': '🚗 Создать заказ', 'callback_data': 'new_order'}],
         [{'text': '👤 Добавить пользователя', 'callback_data': 'add_user'}],
         [{'text': '📊 Список пользователей', 'callback_data': 'list_users'}],
-        [{'text': '🗑️ Удалить пользователя', 'callback_data': 'delete_user'}],
+        [{'text': '📋 Последние заказы', 'callback_data': 'recent_orders'}],
     ]
     return {'inline_keyboard': buttons}
 
@@ -187,6 +238,9 @@ def handle_start_command(chat_id, user_data):
     telegram_id = user_data['id']
     first_name = user_data.get('first_name', 'Пользователь')
     username = user_data.get('username')
+
+    # Очищаем состояние пользователя
+    clear_user_state(telegram_id)
 
     # Обновляем/создаем пользователя
     try:
@@ -247,18 +301,33 @@ def handle_start_command(chat_id, user_data):
 def handle_new_order(chat_id, message_id):
     """Начало создания заказа"""
     text = """
-🏆 <b>ВЫБОР УСЛУГИ</b> 🏆
+🏆 <b>СОЗДАНИЕ ЗАКАЗА</b> 🏆
 
 🔥 <b>Выберите тип мойки для вашего авто:</b>
+
+📝 <i>Пошаги создания заказа:</i>
+1️⃣ Выбор услуги
+2️⃣ Выбор класса обслуживания  
+3️⃣ Выбор мастера
+4️⃣ Указание цены (если нужно)
+5️⃣ Загрузка фото автомобиля
 """
     keyboard = get_services_keyboard()
     edit_message(chat_id, message_id, text, keyboard)
 
 
-def handle_service_selection(chat_id, message_id, service_id):
+def handle_service_selection(chat_id, message_id, service_id, user_id):
     """Выбор услуги"""
     try:
         service = Services.objects.get(id=service_id)
+
+        # Сохраняем состояние
+        state = get_user_state(user_id)
+        state['step'] = 'service_selected'
+        state['service_id'] = service_id
+        state['service_name'] = service.name_services
+        set_user_state(user_id, state)
+
         text = f"""
 🎯 <b>ВЫБОР КЛАССА УСЛУГИ</b>
 
@@ -272,10 +341,19 @@ def handle_service_selection(chat_id, message_id, service_id):
         edit_message(chat_id, message_id, "❌ Услуга не найдена")
 
 
-def handle_class_selection(chat_id, message_id, class_id):
+def handle_class_selection(chat_id, message_id, class_id, user_id):
     """Выбор класса услуги"""
     try:
         service_class = ServiceClasses.objects.get(id=class_id)
+
+        # Обновляем состояние
+        state = get_user_state(user_id)
+        state['step'] = 'class_selected'
+        state['class_id'] = class_id
+        state['class_name'] = service_class.name
+        state['default_price'] = float(service_class.price) if service_class.price else 0
+        set_user_state(user_id, state)
+
         price_text = f"{int(service_class.price):,} UZS" if service_class.price else "Договорная цена"
 
         text = f"""
@@ -292,33 +370,201 @@ def handle_class_selection(chat_id, message_id, class_id):
         edit_message(chat_id, message_id, "❌ Класс услуги не найден")
 
 
-def handle_employee_selection(chat_id, message_id, employee_id):
+def handle_employee_selection(chat_id, message_id, employee_id, user_id):
     """Выбор сотрудника"""
     try:
         employee = Employees.objects.get(id=employee_id)
+
+        # Обновляем состояние
+        state = get_user_state(user_id)
+        state['step'] = 'employee_selected'
+        state['employee_id'] = employee_id
+        state['employee_name'] = str(employee)
+        set_user_state(user_id, state)
+
+        price_text = f"{int(state['default_price']):,} UZS" if state['default_price'] else "Договорная"
+
         text = f"""
-✅ <b>ЗАКАЗ ОФОРМЛЕН!</b>
+💰 <b>УКАЗАНИЕ ЦЕНЫ</b>
 
 👨‍🔧 <b>Выбранный мастер:</b> {employee}
+💵 <b>Стандартная цена:</b> {price_text}
 
-📞 <b>Для завершения оформления заказа свяжитесь с нами:</b>
-- Телефон: +998 XX XXX XX XX
-- Или напишите администратору
+🔹 <b>Выберите действие:</b>
+"""
 
-🕐 <b>Ожидайте звонка для уточнения деталей</b>
+        buttons = []
+        if state['default_price']:
+            buttons.append([{
+                'text': f"✅ Оставить стандартную ({int(state['default_price']):,} UZS)",
+                'callback_data': f"price_default"
+            }])
+
+        buttons.extend([
+            [{'text': '✏️ Указать свою цену', 'callback_data': 'price_custom'}],
+            [{'text': '◀️ Назад к мастерам', 'callback_data': 'back_to_employees'}]
+        ])
+
+        keyboard = {'inline_keyboard': buttons}
+        edit_message(chat_id, message_id, text, keyboard)
+    except Employees.DoesNotExist:
+        edit_message(chat_id, message_id, "❌ Сотрудник не найден")
+
+
+def handle_price_selection(chat_id, message_id, user_id, price_type):
+    """Обработка выбора цены"""
+    state = get_user_state(user_id)
+
+    if price_type == 'default':
+        # Используем стандартную цену
+        state['step'] = 'price_set'
+        state['final_price'] = state['default_price']
+        set_user_state(user_id, state)
+        request_photo(chat_id, message_id, user_id)
+
+    elif price_type == 'custom':
+        # Запрашиваем кастомную цену
+        state['step'] = 'waiting_price'
+        set_user_state(user_id, state)
+
+        text = f"""
+✏️ <b>ВВОД ЦЕНЫ</b>
+
+💰 <b>Введите цену заказа:</b>
+
+📝 <i>Напишите сумму числом (например: 50000)</i>
+⚠️ <i>Только цифры без пробелов и символов</i>
+
+🔙 <i>Для отмены напишите /start</i>
+"""
+
+        edit_message(chat_id, message_id, text)
+
+
+def request_photo(chat_id, message_id, user_id):
+    """Запрос фото автомобиля"""
+    state = get_user_state(user_id)
+
+    price_text = f"{int(state['final_price']):,} UZS" if state['final_price'] else "Договорная"
+
+    text = f"""
+📸 <b>ЗАГРУЗКА ФОТО</b>
+
+✅ <b>Детали заказа:</b>
+🚗 Услуга: {state['service_name']}
+⭐ Класс: {state['class_name']}
+👨‍🔧 Мастер: {state['employee_name']}
+💰 Цена: {price_text}
+
+📷 <b>Отправьте фото автомобиля</b>
+
+⚠️ <i>Обязательно отправьте фото для создания заказа!</i>
+🔙 <i>Для отмены напишите /start</i>
+"""
+
+    state['step'] = 'waiting_photo'
+    set_user_state(user_id, state)
+
+    edit_message(chat_id, message_id, text)
+
+
+def create_order(chat_id, user_id, photo_content, file_name):
+    """Создание заказа в базе данных"""
+    try:
+        state = get_user_state(user_id)
+
+        # Получаем объекты из базы
+        service_class = ServiceClasses.objects.get(id=state['class_id'])
+        employee = Employees.objects.get(id=state['employee_id'])
+
+        # Создаем заказ
+        order = WashOrders()
+        order.type_of_car_wash = service_class
+        order.employees = employee
+        order.negotiated_price = state['final_price']
+
+        # Сохраняем фото
+        order.car_photo.save(file_name, ContentFile(photo_content), save=False)
+        order.save()
+
+        # Очищаем состояние
+        clear_user_state(user_id)
+
+        # Отправляем подтверждение
+        price_text = f"{int(state['final_price']):,} UZS" if state['final_price'] else "Договорная"
+
+        success_text = f"""
+✅ <b>ЗАКАЗ СОЗДАН УСПЕШНО!</b>
+
+🎉 <b>Заказ №{order.id}</b>
+
+📋 <b>Детали:</b>
+🚗 Услуга: {state['service_name']}
+⭐ Класс: {state['class_name']}
+👨‍🔧 Мастер: {state['employee_name']}
+💰 Цена: {price_text}
+📅 Дата: {order.order_date.strftime('%d.%m.%Y %H:%M')}
+
+📞 <b>Мы свяжемся с вами для уточнения деталей</b>
 
 ✨ <b>Спасибо за выбор OltinWash!</b>
 """
 
-        new_order_button = {
+        keyboard = {
             'inline_keyboard': [[
-                {'text': '🚗 Создать новый заказ', 'callback_data': 'new_order'}
+                {'text': '🚗 Создать новый заказ', 'callback_data': 'new_order'},
+                {'text': '🏠 Главное меню', 'callback_data': 'main_menu'}
             ]]
         }
 
-        edit_message(chat_id, message_id, text, new_order_button)
-    except Employees.DoesNotExist:
-        edit_message(chat_id, message_id, "❌ Сотрудник не найден")
+        send_message(chat_id, success_text, keyboard)
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания заказа: {e}")
+        error_text = """
+❌ <b>ОШИБКА СОЗДАНИЯ ЗАКАЗА</b>
+
+🔧 Произошла техническая ошибка
+📞 Обратитесь к администратору
+
+🔄 Попробуйте создать заказ заново
+"""
+        send_message(chat_id, error_text)
+        clear_user_state(user_id)
+        return False
+
+
+def handle_recent_orders(chat_id, message_id):
+    """Показать последние заказы"""
+    try:
+        orders = WashOrders.objects.order_by('-time_create')[:10]
+
+        if not orders:
+            text = "📋 <b>ЗАКАЗЫ НЕ НАЙДЕНЫ</b>\n\n🔍 Пока нет ни одного заказа"
+        else:
+            text = f"📋 <b>ПОСЛЕДНИЕ ЗАКАЗЫ</b>\n\n📊 <b>Показано:</b> {len(orders)}\n\n"
+
+            for order in orders:
+                status = "✅" if order.is_completed else "⏳"
+                price = f"{int(order.negotiated_price):,} UZS" if order.negotiated_price else "Договорная"
+                date = order.order_date.strftime('%d.%m %H:%M') if order.order_date else "Не указана"
+
+                text += f"{status} <b>#{order.id}</b> - {order.type_of_car_wash.name}\n"
+                text += f"👨‍🔧 {order.employees}\n"
+                text += f"💰 {price} | 📅 {date}\n\n"
+
+        back_button = {
+            'inline_keyboard': [[
+                {'text': '◀️ Назад', 'callback_data': 'admin_menu'}
+            ]]
+        }
+
+        edit_message(chat_id, message_id, text, back_button)
+
+    except Exception as e:
+        logger.error(f"Ошибка получения заказов: {e}")
+        edit_message(chat_id, message_id, "❌ Ошибка получения заказов")
 
 
 def handle_list_users(chat_id, message_id):
@@ -396,17 +642,46 @@ def process_message(message_data):
     """Обработка текстового сообщения"""
     chat_id = message_data['chat']['id']
     user_data = message_data['from']
+    user_id = user_data['id']
     text = message_data.get('text', '')
 
     # Проверяем доступ
-    if not is_user_authorized(user_data['id']):
+    if not is_user_authorized(user_id):
         send_access_denied(chat_id, user_data)
         return
 
+    # Проверяем состояние пользователя
+    state = get_user_state(user_id)
+
     if text == '/start':
         handle_start_command(chat_id, user_data)
-    elif text == '/users' and is_user_admin(user_data['id']):
-        # Отправляем список пользователей как новое сообщение
+        return
+
+    # Обработка ввода цены
+    if state.get('step') == 'waiting_price':
+        # Проверяем что введена валидная цена
+        if re.match(r'^\d+$', text.strip()):
+            price = float(text.strip())
+            state['step'] = 'price_set'
+            state['final_price'] = price
+            set_user_state(user_id, state)
+
+            # Переходим к запросу фото
+            request_photo(chat_id, None, user_id)
+        else:
+            error_text = """
+❌ <b>НЕВЕРНЫЙ ФОРМАТ ЦЕНЫ</b>
+
+💰 Введите цену числом (например: 50000)
+⚠️ Только цифры без пробелов и символов
+
+🔄 Попробуйте еще раз или напишите /start для отмены
+"""
+            send_message(chat_id, error_text)
+        return
+
+    # Обработка других команд
+    if text == '/users' and is_user_admin(user_id):
         users = TelegramUser.objects.all().order_by('-created_at')
         users_text = f"👥 <b>СПИСОК ПОЛЬЗОВАТЕЛЕЙ</b>\n\n📊 <b>Всего:</b> {users.count()}\n\n"
 
@@ -429,64 +704,112 @@ def process_message(message_data):
         send_message(chat_id, help_text)
 
 
+def process_photo(message_data):
+    """Обработка фото"""
+    chat_id = message_data['chat']['id']
+    user_data = message_data['from']
+    user_id = user_data['id']
+
+    # Проверяем доступ
+    if not is_user_authorized(user_id):
+        send_access_denied(chat_id, user_data)
+        return
+
+    # Проверяем состояние
+    state = get_user_state(user_id)
+
+    if state.get('step') != 'waiting_photo':
+        send_message(chat_id, "❌ Сначала создайте заказ командой /start")
+        return
+
+    try:
+        # Получаем наибольшее фото
+        photo = message_data['photo'][-1]  # Последнее = наибольшего размера
+        file_id = photo['file_id']
+
+        # Скачиваем фото
+        photo_content = download_photo(file_id)
+
+        if photo_content:
+            # Создаем заказ
+            file_name = f"car_photo_{user_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+
+            success = create_order(chat_id, user_id, photo_content, file_name)
+
+            if not success:
+                send_message(chat_id, "❌ Ошибка при сохранении заказа. Попробуйте еще раз.")
+        else:
+            send_message(chat_id, "❌ Ошибка при загрузке фото. Попробуйте отправить другое фото.")
+
+    except Exception as e:
+        logger.error(f"Ошибка обработки фото: {e}")
+        send_message(chat_id, "❌ Ошибка при обработке фото. Попробуйте еще раз.")
+
+
 def process_callback_query(callback_data):
     """Обработка callback query"""
     query_id = callback_data['id']
     chat_id = callback_data['message']['chat']['id']
     message_id = callback_data['message']['message_id']
     user_data = callback_data['from']
+    user_id = user_data['id']
     data = callback_data['data']
 
     # Проверяем доступ
-    if not is_user_authorized(user_data['id']):
+    if not is_user_authorized(user_id):
         answer_callback_query(query_id, "🚫 Доступ запрещен", show_alert=True)
         return
 
     # Отвечаем на callback query
     answer_callback_query(query_id)
 
-    if data == 'new_order':
+    if data == 'main_menu':
+        clear_user_state(user_id)
+        handle_start_command(chat_id, user_data)
+    elif data == 'new_order':
+        clear_user_state(user_id)
         handle_new_order(chat_id, message_id)
     elif data == 'list_users':
-        if is_user_admin(user_data['id']):
+        if is_user_admin(user_id):
             handle_list_users(chat_id, message_id)
-        else:
-            answer_callback_query(query_id, "🚫 Только для администраторов", show_alert=True)
+    elif data == 'recent_orders':
+        if is_user_admin(user_id):
+            handle_recent_orders(chat_id, message_id)
     elif data == 'admin_menu':
-        if is_user_admin(user_data['id']):
+        if is_user_admin(user_id):
             handle_admin_menu(chat_id, message_id)
     elif data == 'back_to_services':
+        clear_user_state(user_id)
         handle_new_order(chat_id, message_id)
+    elif data == 'back_to_classes':
+        state = get_user_state(user_id)
+        if 'service_id' in state:
+            handle_service_selection(chat_id, message_id, state['service_id'], user_id)
+    elif data == 'back_to_employees':
+        state = get_user_state(user_id)
+        if 'class_id' in state:
+            handle_class_selection(chat_id, message_id, state['class_id'], user_id)
     elif data.startswith('service_'):
         service_id = int(data.split('_')[1])
-        handle_service_selection(chat_id, message_id, service_id)
+        handle_service_selection(chat_id, message_id, service_id, user_id)
     elif data.startswith('class_'):
         class_id = int(data.split('_')[1])
-        handle_class_selection(chat_id, message_id, class_id)
+        handle_class_selection(chat_id, message_id, class_id, user_id)
     elif data.startswith('employee_'):
         employee_id = int(data.split('_')[1])
-        handle_employee_selection(chat_id, message_id, employee_id)
+        handle_employee_selection(chat_id, message_id, employee_id, user_id)
+    elif data == 'price_default':
+        handle_price_selection(chat_id, message_id, user_id, 'default')
+    elif data == 'price_custom':
+        handle_price_selection(chat_id, message_id, user_id, 'custom')
     elif data == 'add_user':
-        if is_user_admin(user_data['id']):
+        if is_user_admin(user_id):
             text = """
 👤 <b>ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ</b>
 
 📝 <b>Функция в разработке</b>
 
 💡 <b>Пока добавляйте пользователей через Django админку:</b>
-/admin/
-
-🔄 <b>Используйте /start для возврата в меню</b>
-"""
-            edit_message(chat_id, message_id, text)
-    elif data == 'delete_user':
-        if is_user_admin(user_data['id']):
-            text = """
-🗑️ <b>УДАЛЕНИЕ ПОЛЬЗОВАТЕЛЯ</b>
-
-📝 <b>Функция в разработке</b>
-
-💡 <b>Пока удаляйте пользователей через Django админку:</b>
 /admin/
 
 🔄 <b>Используйте /start для возврата в меню</b>
@@ -507,7 +830,12 @@ def telegram_webhook(request):
 
         # Обрабатываем сообщение
         if 'message' in update_data:
-            process_message(update_data['message'])
+            message = update_data['message']
+
+            if 'photo' in message:
+                process_photo(message)
+            elif 'text' in message:
+                process_message(message)
 
         # Обрабатываем callback query
         elif 'callback_query' in update_data:
