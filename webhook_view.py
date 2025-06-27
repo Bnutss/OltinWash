@@ -7,8 +7,8 @@ from django.views.decorators.http import require_POST
 from carwash.models import TelegramUser, Services, ServiceClasses, WashOrders
 from employees.models import Employees
 from django.core.files.base import ContentFile
-from datetime import datetime
 from django.utils import timezone
+import pytz
 import re
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,21 @@ FALLBACK_ADMIN_IDS = {1207702857}
 
 # Состояния пользователей
 USER_STATES = {}
+
+# Часовой пояс Ташкента
+TASHKENT_TZ = pytz.timezone('Asia/Tashkent')
+
+
+def get_tashkent_time():
+    """Получить текущее время в Ташкенте"""
+    return timezone.now().astimezone(TASHKENT_TZ)
+
+
+def format_datetime(dt):
+    """Форматировать дату/время для Ташкента"""
+    if dt.tzinfo is None:
+        dt = timezone.make_aware(dt)
+    return dt.astimezone(TASHKENT_TZ).strftime('%d.%m.%Y %H:%M')
 
 
 def get_user_state(user_id):
@@ -135,7 +150,7 @@ def is_user_admin(telegram_id):
 
 def get_today_orders_count():
     """Получить количество заказов на сегодня"""
-    today = timezone.now().date()
+    today = get_tashkent_time().date()
     return WashOrders.objects.filter(time_create__date=today).count()
 
 
@@ -516,7 +531,7 @@ def create_order(chat_id, user_id, photo_content, file_name):
 ⭐ Класс: {state['class_name']}
 👨‍🔧 Мастер: {state['employee_name']}
 💰 Цена: {price_text}
-📅 Дата: {order.time_create.strftime('%d.%m.%Y %H:%M')}
+📅 Дата: {format_datetime(order.time_create)}
 
 📞 <b>Мы свяжемся с вами для уточнения деталей</b>
 
@@ -561,7 +576,7 @@ def handle_recent_orders(chat_id, message_id):
             for order in orders:
                 status = "✅" if order.is_completed else "⏳"
                 price = f"{int(order.negotiated_price):,} UZS" if order.negotiated_price else "Договорная"
-                date = order.time_create.strftime('%d.%m %H:%M')
+                date = format_datetime(order.time_create)
 
                 text += f"{status} <b>#{order.id}</b> - {order.type_of_car_wash.name}\n"
                 text += f"👨‍🔧 {order.employees}\n"
@@ -629,6 +644,86 @@ def handle_admin_menu(chat_id, message_id):
     edit_message(chat_id, message_id, text, keyboard)
 
 
+def handle_add_user_start(chat_id, message_id, user_id):
+    """Начать процесс добавления пользователя"""
+    state = get_user_state(user_id)
+    state['step'] = 'waiting_user_id'
+    set_user_state(user_id, state)
+
+    text = """
+👤 <b>ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ</b>
+
+📝 <b>Введите Telegram ID пользователя:</b>
+
+💡 <i>Пользователь должен написать боту @userinfobot чтобы узнать свой ID</i>
+
+⚠️ <i>Введите только числовой ID (например: 123456789)</i>
+
+🔙 <i>Для отмены напишите /start</i>
+"""
+
+    edit_message(chat_id, message_id, text)
+
+
+def handle_add_user_process(chat_id, user_id, telegram_id_to_add):
+    """Обработка добавления пользователя"""
+    try:
+        # Проверяем что пользователь не существует
+        if TelegramUser.objects.filter(telegram_id=str(telegram_id_to_add)).exists():
+            error_text = f"""
+❌ <b>ПОЛЬЗОВАТЕЛЬ УЖЕ СУЩЕСТВУЕТ</b>
+
+👤 Пользователь с ID <code>{telegram_id_to_add}</code> уже добавлен в систему
+
+🔄 Попробуйте добавить другого пользователя или используйте /start для возврата в меню
+"""
+            send_message(chat_id, error_text)
+            return
+
+        # Создаем пользователя
+        user = TelegramUser.objects.create(
+            telegram_id=str(telegram_id_to_add),
+            first_name="Новый пользователь",
+            is_admin=False
+        )
+
+        # Очищаем состояние
+        clear_user_state(user_id)
+
+        success_text = f"""
+✅ <b>ПОЛЬЗОВАТЕЛЬ ДОБАВЛЕН УСПЕШНО!</b>
+
+👤 <b>Telegram ID:</b> <code>{telegram_id_to_add}</code>
+📅 <b>Дата добавления:</b> {format_datetime(user.created_at)}
+
+✨ Пользователь может теперь пользоваться ботом!
+
+💡 <i>Имя и username обновятся автоматически при первом обращении к боту</i>
+"""
+
+        keyboard = {
+            'inline_keyboard': [[
+                {'text': '👤 Добавить еще пользователя', 'callback_data': 'add_user'},
+                {'text': '🏠 Главное меню', 'callback_data': 'admin_menu'}
+            ]]
+        }
+
+        send_message(chat_id, success_text, keyboard)
+
+    except Exception as e:
+        logger.error(f"Ошибка добавления пользователя: {e}")
+        error_text = """
+❌ <b>ОШИБКА ДОБАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯ</b>
+
+🔧 Произошла техническая ошибка
+📞 Обратитесь к разработчику
+
+🔄 Попробуйте еще раз или напишите /start
+"""
+        send_message(chat_id, error_text)
+        clear_user_state(user_id)
+
+
 def send_access_denied(chat_id, user_data):
     """Отправка сообщения об отказе в доступе"""
     user_id = user_data['id']
@@ -693,6 +788,26 @@ def process_message(message_data):
             send_message(chat_id, error_text)
         return
 
+    # Обработка ввода Telegram ID для добавления пользователя
+    if state.get('step') == 'waiting_user_id':
+        # Проверяем что введен валидный ID
+        if re.match(r'^\d+$', text.strip()):
+            telegram_id_to_add = int(text.strip())
+            handle_add_user_process(chat_id, user_id, telegram_id_to_add)
+        else:
+            error_text = """
+❌ <b>НЕВЕРНЫЙ ФОРМАТ ID</b>
+
+👤 Введите Telegram ID числом (например: 123456789)
+⚠️ Только цифры без пробелов и символов
+
+💡 Пользователь может узнать свой ID у бота @userinfobot
+
+🔄 Попробуйте еще раз или напишите /start для отмены
+"""
+            send_message(chat_id, error_text)
+        return
+
     # Обработка других команд
     if text == '/users' and is_user_admin(user_id):
         users = TelegramUser.objects.all().order_by('-created_at')
@@ -745,7 +860,8 @@ def process_photo(message_data):
 
         if photo_content:
             # Создаем заказ
-            file_name = f"car_photo_{user_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+            tashkent_time = get_tashkent_time()
+            file_name = f"car_photo_{user_id}_{tashkent_time.strftime('%Y%m%d_%H%M%S')}.jpg"
 
             success = create_order(chat_id, user_id, photo_content, file_name)
 
@@ -817,17 +933,8 @@ def process_callback_query(callback_data):
         handle_price_selection(chat_id, message_id, user_id, 'custom')
     elif data == 'add_user':
         if is_user_admin(user_id):
-            text = """
-👤 <b>ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ</b>
-
-📝 <b>Функция в разработке</b>
-
-💡 <b>Пока добавляйте пользователей через Django админку:</b>
-/admin/
-
-🔄 <b>Используйте /start для возврата в меню</b>
-"""
-            edit_message(chat_id, message_id, text)
+            clear_user_state(user_id)
+            handle_add_user_start(chat_id, message_id, user_id)
 
 
 @csrf_exempt
