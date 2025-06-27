@@ -13,9 +13,26 @@ class UserProfile(models.Model):
     mobile_app = models.BooleanField(default=False, verbose_name='Мобильное приложение')
     delete_washorders = models.BooleanField(default=False, verbose_name='Может удалять заказы')
     delete_employees = models.BooleanField(default=False, verbose_name='Может удалять сотрудников')
+    telegram_id = models.CharField(max_length=32, blank=True, null=True, verbose_name='Telegram ID')
 
     def __str__(self):
         return self.user.username
+
+
+class TelegramUser(models.Model):
+    telegram_id = models.CharField(max_length=32, unique=True, verbose_name='Telegram ID')
+    username = models.CharField(max_length=255, blank=True, null=True, verbose_name='Username')
+    first_name = models.CharField(max_length=255, blank=True, null=True, verbose_name='Имя')
+    is_admin = models.BooleanField(default=False, verbose_name='Администратор')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Обновлено')
+
+    class Meta:
+        verbose_name = 'Telegram пользователь'
+        verbose_name_plural = 'Telegram пользователи'
+
+    def __str__(self):
+        return f"{self.first_name or self.username or self.telegram_id} ({self.telegram_id})"
 
 
 class Services(models.Model):

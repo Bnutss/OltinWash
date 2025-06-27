@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
-from carwash.models import ServiceClasses, WashOrders, Services, UserProfile
+from carwash.models import ServiceClasses, WashOrders, Services, UserProfile, TelegramUser
 
 
 # Инлайн-профиль пользователя
@@ -41,6 +41,14 @@ class WashOrdersAdmin(admin.ModelAdmin):
     search_fields = ('employees__username',)  # Используем точный путь к полю
     list_filter = ('employees', 'type_of_car_wash')
     autocomplete_fields = ('employees', 'type_of_car_wash')
+
+
+@admin.register(TelegramUser)
+class TelegramUserAdmin(admin.ModelAdmin):
+    list_display = ('telegram_id', 'first_name', 'username', 'is_admin', 'created_at')
+    list_filter = ('is_admin', 'created_at')
+    search_fields = ('telegram_id', 'first_name', 'username')
+    readonly_fields = ('created_at', 'updated_at')
 
 
 # Заменяем стандартный UserAdmin
