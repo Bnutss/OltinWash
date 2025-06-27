@@ -913,7 +913,7 @@ async def main():
     dp.include_router(router)
 
     await bot.set_webhook(
-        url="https://yourdomain.com/webhook",
+        url="https://oltinwash.pythonanywhere.com/webhook",
         drop_pending_updates=True
     )
 
