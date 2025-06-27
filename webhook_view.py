@@ -8,6 +8,7 @@ from carwash.models import TelegramUser, Services, ServiceClasses, WashOrders
 from employees.models import Employees
 from django.core.files.base import ContentFile
 from datetime import datetime
+from django.utils import timezone
 import re
 
 logger = logging.getLogger(__name__)
@@ -132,6 +133,12 @@ def is_user_admin(telegram_id):
         return False
 
 
+def get_today_orders_count():
+    """Получить количество заказов на сегодня"""
+    today = timezone.now().date()
+    return WashOrders.objects.filter(time_create__date=today).count()
+
+
 def get_services_keyboard():
     """Клавиатура с услугами"""
     try:
@@ -197,9 +204,10 @@ def get_service_classes_keyboard(service_id):
 
 
 def get_employees_keyboard():
-    """Клавиатура с сотрудниками"""
+    """Клавиатура с сотрудниками (только не уволенные)"""
     try:
-        employees = Employees.objects.all()
+        # Фильтруем только работающих сотрудников
+        employees = Employees.objects.filter(fired=False)
         buttons = []
 
         worker_emojis = ['👨‍🔧', '👩‍🔧', '🧑‍🔧', '👨‍💼', '👩‍💼']
@@ -259,7 +267,8 @@ def handle_start_command(chat_id, user_data):
     except Exception as e:
         logger.error(f"Ошибка создания/обновления пользователя: {e}")
 
-    orders_count = WashOrders.objects.count()
+    # Получаем количество заказов на сегодня
+    today_orders_count = get_today_orders_count()
 
     if is_user_admin(telegram_id):
         users_count = TelegramUser.objects.count()
@@ -273,7 +282,7 @@ def handle_start_command(chat_id, user_data):
 ✨ Профессиональный уход за вашим авто
 💎 Высочайшее качество обслуживания
 
-📊 Всего заказов выполнено: <b>{orders_count}</b>
+📊 Заказов сегодня: <b>{today_orders_count}</b>
 👥 Авторизованных пользователей: <b>{users_count}</b>
 
 🚗 <b>Выберите действие:</b>
@@ -289,7 +298,7 @@ def handle_start_command(chat_id, user_data):
 ✨ Профессиональный уход за вашим авто
 💎 Высочайшее качество обслуживания
 
-📊 Всего заказов выполнено: <b>{orders_count}</b>
+📊 Заказов сегодня: <b>{today_orders_count}</b>
 
 🚗 <b>Выберите услугу:</b>
 """
@@ -425,6 +434,7 @@ def handle_price_selection(chat_id, message_id, user_id, price_type):
     elif price_type == 'custom':
         # Запрашиваем кастомную цену
         state['step'] = 'waiting_price'
+        state['price_message_id'] = message_id  # Сохраняем ID сообщения
         set_user_state(user_id, state)
 
         text = f"""
@@ -465,7 +475,10 @@ def request_photo(chat_id, message_id, user_id):
     state['step'] = 'waiting_photo'
     set_user_state(user_id, state)
 
-    edit_message(chat_id, message_id, text)
+    if message_id:
+        edit_message(chat_id, message_id, text)
+    else:
+        send_message(chat_id, text)
 
 
 def create_order(chat_id, user_id, photo_content, file_name):
@@ -503,7 +516,7 @@ def create_order(chat_id, user_id, photo_content, file_name):
 ⭐ Класс: {state['class_name']}
 👨‍🔧 Мастер: {state['employee_name']}
 💰 Цена: {price_text}
-📅 Дата: {order.order_date.strftime('%d.%m.%Y %H:%M')}
+📅 Дата: {order.time_create.strftime('%d.%m.%Y %H:%M')}
 
 📞 <b>Мы свяжемся с вами для уточнения деталей</b>
 
@@ -548,7 +561,7 @@ def handle_recent_orders(chat_id, message_id):
             for order in orders:
                 status = "✅" if order.is_completed else "⏳"
                 price = f"{int(order.negotiated_price):,} UZS" if order.negotiated_price else "Договорная"
-                date = order.order_date.strftime('%d.%m %H:%M') if order.order_date else "Не указана"
+                date = order.time_create.strftime('%d.%m %H:%M')
 
                 text += f"{status} <b>#{order.id}</b> - {order.type_of_car_wash.name}\n"
                 text += f"👨‍🔧 {order.employees}\n"
@@ -598,7 +611,7 @@ def handle_list_users(chat_id, message_id):
 
 def handle_admin_menu(chat_id, message_id):
     """Админ меню"""
-    orders_count = WashOrders.objects.count()
+    today_orders_count = get_today_orders_count()
     users_count = TelegramUser.objects.count()
 
     text = f"""
@@ -606,7 +619,7 @@ def handle_admin_menu(chat_id, message_id):
 
 👑 <b>Режим администратора</b>
 
-📊 Всего заказов выполнено: <b>{orders_count}</b>
+📊 Заказов сегодня: <b>{today_orders_count}</b>
 👥 Авторизованных пользователей: <b>{users_count}</b>
 
 🚗 <b>Выберите действие:</b>
@@ -666,7 +679,7 @@ def process_message(message_data):
             state['final_price'] = price
             set_user_state(user_id, state)
 
-            # Переходим к запросу фото
+            # Переходим к запросу фото - отправляем новое сообщение
             request_photo(chat_id, None, user_id)
         else:
             error_text = """
