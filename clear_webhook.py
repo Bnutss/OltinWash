@@ -6,7 +6,6 @@ WEBHOOK_URL = "https://oltinwash.pythonanywhere.com/webhook/telegram/"
 # Удаляем webhook
 requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
 
-# Устанавливаем заново с очисткой pending
 response = requests.post(
     f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
     data={
