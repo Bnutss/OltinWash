@@ -13,7 +13,7 @@ import re
 
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = "8087998931:AAGykWvkx-deJ8G5O0kmfoI_TcJXl2fLMtE"
+BOT_TOKEN = "8124655365:AAHgaInvKblFkm51Cz4TQEquF8K1zUyt4kQ"
 FALLBACK_ADMIN_IDS = {1207702857}
 
 USER_STATES = {}
