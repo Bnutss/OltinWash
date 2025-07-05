@@ -1,6 +1,6 @@
 import requests
 
-BOT_TOKEN = "8087998931:AAGykWvkx-deJ8G5O0kmfoI_TcJXl2fLMtE"
+BOT_TOKEN = "8124655365:AAHgaInvKblFkm51Cz4TQEquF8K1zUyt4kQ"
 WEBHOOK_URL = "https://oltinwash.pythonanywhere.com/webhook/telegram/"
 
 print("🗑️ Удаляем старый webhook...")
@@ -13,7 +13,6 @@ print(f"Удаление: {delete_response.json()}")
 
 print("✨ Устанавливаем новый webhook...")
 
-# Устанавливаем заново с очисткой pending
 response = requests.post(
     f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
     data={
