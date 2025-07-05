@@ -16,10 +16,8 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = "8087998931:AAGykWvkx-deJ8G5O0kmfoI_TcJXl2fLMtE"
 FALLBACK_ADMIN_IDS = {1207702857}
 
-# Состояния пользователей
 USER_STATES = {}
 
-# Часовой пояс Ташкента
 TASHKENT_TZ = pytz.timezone('Asia/Tashkent')
 
 
@@ -118,7 +116,6 @@ def download_photo(file_id):
 
         file_path = file_data['result']['file_path']
 
-        # Скачиваем файл
         download_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
         photo_response = requests.get(download_url)
 
