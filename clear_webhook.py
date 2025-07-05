@@ -1,6 +1,6 @@
 import requests
 
-BOT_TOKEN = "8124655365:AAHgaInvKblFkm51Cz4TQEquF8K1zUyt4kQ"
+BOT_TOKEN = "7861727229:AAHH61q4csyM19EyNB6fA69XOptxEwWg0p4"
 WEBHOOK_URL = "https://oltinwash.pythonanywhere.com/webhook/telegram/"
 
 print("🗑️ Удаляем старый webhook...")
