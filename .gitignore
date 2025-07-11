@@ -50,3 +50,31 @@ node_modules/
 # Windows system files
 Thumbs.db
 ehthumbs.db
+
+# ДОПОЛНЕНИЯ ДЛЯ БЕЗОПАСНОСТИ БОТА:
+# Старые небезопасные файлы с токенами
+check_webhook.py
+clear_webhook.py
+*webhook*.py
+!secure_webhook.py
+
+# Backup файлы с возможными секретами
+*.bak
+*.backup
+*.old
+*_backup.*
+
+# Конфигурационные файлы с секретами
+config.py
+secrets.py
+tokens.py
+credentials.json
+*.key
+*.pem
+*.p12
+
+# Временные файлы редакторов
+*~
+*.tmp
+.#*
+\#*#
