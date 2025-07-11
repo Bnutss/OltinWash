@@ -1,6 +1,6 @@
 import requests
 
-BOT_TOKEN = "7861727229:AAHH61q4csyM19EyNB6fA69XOptxEwWg0p4"
+BOT_TOKEN = "7823635429:AAHir-_kU8Ktyp9C-nk-cPbROzkBTuyqLYI"
 
 print("🔍 Проверяем статус webhook...")
 
